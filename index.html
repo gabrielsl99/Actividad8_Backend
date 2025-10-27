@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Subjects CRUD (Backendless via Flask)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; }
+    h1 { margin-bottom: 8px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(280px, 1fr)); gap: 16px; }
+    fieldset { border: 1px solid #ddd; padding: 12px; border-radius: 8px; }
+    legend { padding: 0 6px; font-weight: bold; }
+    label { display:block; margin: 6px 0 2px; }
+    input[type="text"], input[type="number"] { width: 100%; padding: 6px; }
+    button { margin-top: 8px; padding: 6px 10px; cursor: pointer; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+    th, td { border: 1px solid #ccc; padding: 6px 8px; }
+    th { background: #f5f5f5; }
+    .row-actions { display:flex; gap: 6px; }
+    .ok { color: #0a7a1f; }
+    .err { color: #b00020; }
+    .muted { color: #666; font-size: 0.9em; }
+  </style>
+</head>
+<body>
+  <h1>CRUD Subjects</h1>
+  <p class="muted">Actividad 8. Backend</p>
+
+
+  <div class="grid">
+    <fieldset>
+      <legend>Crear Subject</legend>
+      <label>Nombre</label>
+      <input id="c_name" type="text" placeholder="Cálculo I" />
+      <label>Código</label>
+      <input id="c_code" type="text" placeholder="CALC1" />
+      <label>Tipo (kind)</label>
+      <input id="c_kind" type="text" value="class" />
+      <label>Horas/semana</label>
+      <input id="c_weekly" type="number" value="4" />
+      <button onclick="createSubject()">Crear</button>
+      <div id="c_status"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Actualizar Subject</legend>
+      <label>objectId</label>
+      <input id="u_id" type="text" placeholder="coloca un objectId" />
+      <label>Tipo (kind)</label>
+      <input id="u_kind" type="text" placeholder="exam | task | project | class" />
+      <label>Horas/semana</label>
+      <input id="u_weekly" type="number" placeholder="6" />
+      <button onclick="updateSubject()">Actualizar</button>
+      <div id="u_status"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Buscar por Código</legend>
+      <label>Código</label>
+      <input id="g_code" type="text" placeholder="CALC1" />
+      <button onclick="getByCode()">Buscar</button>
+      <div id="g_status"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Eliminar Subject</legend>
+      <label>objectId</label>
+      <input id="d_id" type="text" placeholder="coloca un objectId" />
+      <button onclick="deleteSubject()">Eliminar</button>
+      <div id="d_status"></div>
+    </fieldset>
+  </div>
+
+  <hr />
+
+  
+
+<script>
+async function loadList(){
+  const res = await fetch("/api/subjects");
+  const data = await res.json();
+  const tbody = document.querySelector("#tbl tbody");
+  tbody.innerHTML = "";
+  data.forEach(row => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${row.objectId || ""}</td>
+      <td>${row.name || ""}</td>
+      <td>${row.code || ""}</td>
+      <td>${row.kind || ""}</td>
+      <td>${row.weeklyLoadHours ?? ""}</td>
+      <td class="row-actions">
+        <button onclick="prefillUpdate('${row.objectId}', '${(row.kind||"").replace(/'/g, "\\'")}', ${row.weeklyLoadHours ?? "null"})">Editar</button>
+        <button onclick="quickDelete('${row.objectId}')">Borrar</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function prefillUpdate(id, kind, weekly){
+  document.getElementById("u_id").value = id;
+  document.getElementById("u_kind").value = kind || "";
+  document.getElementById("u_weekly").value = weekly ?? "";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+async function quickDelete(id){
+  if(!confirm("¿Eliminar este registro?")) return;
+  const res = await fetch(`/api/subjects/${id}`, { method: "DELETE" });
+  if(res.status === 204){
+    alert("Eliminado OK");
+    loadList();
+  } else {
+    const txt = await res.text();
+    alert("Error: " + txt);
+  }
+}
+
+async function createSubject(){
+  const name = document.getElementById("c_name").value.trim();
+  const code = document.getElementById("c_code").value.trim();
+  const kind = document.getElementById("c_kind").value.trim();
+  const weekly = parseInt(document.getElementById("c_weekly").value, 10);
+  const st = document.getElementById("c_status");
+  st.textContent = "Creando...";
+  try {
+    const res = await fetch("/api/subjects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, code, kind, weeklyLoadHours: weekly })
+    });
+    if(!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    st.innerHTML = `<span class="ok">Creado: ${data.objectId}</span>`;
+    loadList();
+  } catch (e){
+    st.innerHTML = `<span class="err">${e}</span>`;
+  }
+}
+
+async function updateSubject(){
+  const id = document.getElementById("u_id").value.trim();
+  const kind = document.getElementById("u_kind").value.trim();
+  const weekly = document.getElementById("u_weekly").value;
+  const st = document.getElementById("u_status");
+  if(!id){ st.innerHTML = '<span class="err">Falta objectId</span>'; return; }
+  const payload = {};
+  if(kind) payload.kind = kind;
+  if(weekly) payload.weeklyLoadHours = parseInt(weekly, 10);
+  st.textContent = "Actualizando...";
+  try {
+    const res = await fetch(`/api/subjects/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if(!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    st.innerHTML = `<span class="ok">Actualizado: ${data.objectId}</span>`;
+    loadList();
+  } catch(e){
+    st.innerHTML = `<span class="err">${e}</span>`;
+  }
+}
+
+async function deleteSubject(){
+  const id = document.getElementById("d_id").value.trim();
+  const st = document.getElementById("d_status");
+  if(!id){ st.innerHTML = '<span class="err">Falta objectId</span>'; return; }
+  st.textContent = "Eliminando...";
+  try {
+    const res = await fetch(`/api/subjects/${id}`, { method: "DELETE" });
+    if(res.status === 204){
+      st.innerHTML = `<span class="ok">Eliminado OK</span>`;
+      loadList();
+    } else {
+      const txt = await res.text();
+      throw new Error(txt);
+    }
+  } catch(e){
+    st.innerHTML = `<span class="err">${e}</span>`;
+  }
+}
+
+async function getByCode(){
+  const code = document.getElementById("g_code").value.trim();
+  const st = document.getElementById("g_status");
+  if(!code){ st.innerHTML = '<span class="err">Falta code</span>'; return; }
+  st.textContent = "Buscando...";
+  try {
+    const res = await fetch(`/api/subjects/by-code?code=${encodeURIComponent(code)}`);
+    if(!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    if(!data.objectId){
+      st.innerHTML = '<span class="err">No encontrado</span>';
+    } else {
+      st.innerHTML = `<span class="ok">Encontrado: ${data.objectId} (${data.name})</span>`;
+      prefillUpdate(data.objectId, data.kind || "", data.weeklyLoadHours ?? "");
+    }
+  } catch(e){
+    st.innerHTML = `<span class="err">${e}</span>`;
+  }
+}
+</script>
+</body>
+</html>
