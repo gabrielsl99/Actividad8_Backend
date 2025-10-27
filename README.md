@@ -25,5 +25,3 @@ El objetivo es demostrar el uso de servicios BaaS para gestionar datos de manera
 
 ---
 
-## 📂 Estructura del Proyecto
-
